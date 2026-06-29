@@ -476,23 +476,18 @@ async function generateReview() {
     "口コミ文章のみ出力。前置き・説明不要。";
 
   try {
-    const data = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "https://api.anthropic.com/v1/messages");
-      xhr.setRequestHeader("Content-Type", "application/json");
-      xhr.setRequestHeader("x-api-key", API_KEY);
-      xhr.setRequestHeader("anthropic-version", "2023-06-01");
-      xhr.setRequestHeader("anthropic-dangerous-allow-browser", "true");
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText));
-        } else {
-          reject(new Error("APIエラー: " + xhr.status));
-        }
-      };
-      xhr.onerror = () => reject(new Error("接続エラーが発生しました"));
-      xhr.send(JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{role:"user",content:prompt}] }));
+    const res = await fetch("https://corsproxy.io/?url=https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-allow-browser": "true"
+      },
+      body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{role:"user",content:prompt}] })
     });
+    if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.error?.message||"APIエラー: "+res.status); }
+    const data = await res.json();
     genText = data.content?.[0]?.text?.trim() || "";
     if (!genText) throw new Error("文章の生成に失敗しました。");
     document.getElementById("errorMsg").style.display = "none";
