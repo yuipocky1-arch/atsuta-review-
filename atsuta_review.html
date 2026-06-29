@@ -455,55 +455,6 @@ async function goResult() {
 
 /* ── AI 生成 ── */
 async function generateReview() {
-  const seed = Math.floor(Math.random() * 999999);
-  const prompt =
-    "あなたは名古屋の「あつた皮ふ科・美容皮膚科クリニック」に来院した患者です。" +
-    "以下の情報をもとに、GoogleマップのMEO対策として効果的かつ自然な日本語の口コミ文章を180〜230字で書いてください。\n\n" +
-    "【患者情報】\n" +
-    "- 年代：" + A.age + "\n" +
-    "- 受けた治療：" + [...A.treatment].join("・") + "\n" +
-    "- 治療のきっかけ：" + [...A.reason].join("、") + "\n" +
-    "- 治療満足度：" + A.satTreat + "/5点　治療コメント：" + [...A.treatComment].join("、") + "\n" +
-    "- 接遇満足度：" + A.satStaff + "/5点　接遇コメント：" + [...A.staffComment].join("、") + "\n" +
-    "- 当院を選んだ理由：" + [...A.clinicReason].join("、") + "\n" +
-    "- 推奨度：" + A.nps + "/10点\n\n" +
-    "【MEO対策の必須条件】\n" +
-    "1. クリニック名「あつた皮ふ科・美容皮膚科クリニック」または「あつた皮ふ科」を必ず含める\n" +
-    "2. 「名古屋市中川区」「熱田区」「名古屋」のいずれか1〜2個を自然に含める\n" +
-    "3. 「皮膚科」「美容皮膚科」の両方を文中に自然に入れる\n" +
-    "4. 患者が受けた治療（" + [...A.treatment].join("・") + "）の具体的な言葉を入れる\n" +
-    "5. 患者のリアルな体験談として書く（宣伝文ではなく自然な口コミ口調）\n" +
-    "6. 同じ情報でも毎回異なる文章になるよう書き出し・文体・エピソードの切り口を変える（シード:" + seed + "）\n\n" +
-    "口コミ文章のみ出力。前置き・説明不要。";
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": API_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-allow-browser": "true"
-      },
-      body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{role:"user",content:prompt}] })
-    });
-    if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.error?.message||"APIエラー: "+res.status); }
-    const data = await res.json();
-    genText = data.content?.[0]?.text?.trim() || "";
-    if (!genText) throw new Error("文章の生成に失敗しました。");
-    document.getElementById("errorMsg").style.display = "none";
-  } catch(e) {
-    genText = "";
-    const el = document.getElementById("errorMsg");
-    el.textContent = "エラー：" + e.message;
-    el.style.display = "block";
-  }
-  document.getElementById("reviewOut").textContent = genText;
-  sendToSheet(genText);
-}
-
-/* ── スプレッドシート送信 ── */
-function sendToSheet(reviewText) {
   try {
     const payload = {
       age:          A.age,
@@ -516,18 +467,30 @@ function sendToSheet(reviewText) {
       staffComment: [...A.staffComment].join("、"),
       clinicReason: [...A.clinicReason].join("、"),
       nps:          A.nps,
-      media:        [...A.media].join("、"),
-      reviewText:   reviewText
+      media:        [...A.media].join("、")
     };
-    fetch(GAS_URL, {
+
+    const res = await fetch(GAS_URL, {
       method: "POST",
-      mode:   "no-cors",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain" },
       body: JSON.stringify(payload)
     });
+
+    const data = await res.json();
+
+    if (data.status === "ok" && data.reviewText) {
+      genText = data.reviewText;
+      document.getElementById("errorMsg").style.display = "none";
+    } else {
+      throw new Error(data.message || "文章の生成に失敗しました。");
+    }
   } catch(e) {
-    console.log("スプシ送信エラー:", e);
+    genText = "";
+    const el = document.getElementById("errorMsg");
+    el.textContent = "エラー：" + e.message;
+    el.style.display = "block";
   }
+  document.getElementById("reviewOut").textContent = genText;
 }
 
 /* ── コピー ── */
